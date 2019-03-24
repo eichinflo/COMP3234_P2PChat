@@ -10,18 +10,23 @@
 from tkinter import *
 import sys
 import socket
+import threading
+import time
 
 #
 # Global variables
 #
 
 USERNAME = None
-JOINED = False
 SERVER_ADDRESS = None
 SERVER_PORT = None
 MY_PORT = None
 MY_SOCKET = None
-CURRENT_CHATROOMS = None
+KEEPALIVE_THREAD = None
+POKE_SOCKET = None
+POKE_THREAD = None
+CURRENT_CHATROOM = None
+MEMBERS_LIST = None
 
 
 #
@@ -88,9 +93,9 @@ def do_User_(username):
     >>> USERNAME == 'spam'
     True
     """
-    global JOINED
-    # did client already join a server?
-    if JOINED is True:
+    global CURRENT_CHATROOM
+    # did client already join a chatroom?
+    if CURRENT_CHATROOM:
         return 'Could not change username: Already joined'
     # do we have a valid username? We can include further checks here
     if not username:
@@ -145,8 +150,6 @@ def do_List_():
         return 'Error'
     else:
         print('[DEBUG] Succesfully received list of names.')
-        global CURRENT_CHATROOMS
-        CURRENT_CHATROOMS = message
         return '\n'.join(message)
 
 
@@ -157,23 +160,23 @@ def connect_to_server():
     global SERVER_ADDRESS, SERVER_PORT, MY_PORT
     print('[DEBUG] Establishing new connection to server.')
     # create new_username socket, bind and connect
-    my_socket = socket.socket()
+    serverSocket = socket.socket()
     try:
-        my_socket.bind(('', MY_PORT))
+        serverSocket.bind(('', MY_PORT))
     except Exception as e:
-        my_socket.close()
+        serverSocket.close()
         print('[CLIENT_ERROR] Could not bind specified port:\n' + str(e))
         return 'Error'
 
     try:
-        my_socket.connect((SERVER_ADDRESS, SERVER_PORT))
+        serverSocket.connect((SERVER_ADDRESS, SERVER_PORT))
     except Exception as e:
-        my_socket.close()
+        serverSocket.close()
         print('[CLIENT_ERROR] Connection failed:\n' + str(e))
         return 'Error'
 
     global MY_SOCKET
-    MY_SOCKET = my_socket
+    MY_SOCKET = serverSocket
     return False
 
 
@@ -247,8 +250,8 @@ def do_Join_(chatroom):
     """
     print('[DEBUG] Attempting to join chatroom')
     # check, if we are already in a chatroom or have a username
-    global JOINED
-    if JOINED:
+    global CURRENT_CHATROOM
+    if CURRENT_CHATROOM:
         print('[DEBUG] Already joined chatroom')
         return 'You already joined a chatroom.'
     global USERNAME
@@ -283,13 +286,21 @@ def do_Join_(chatroom):
         return 'Error'
     if response.startswith('M:') and response.endswith(':\r\n'):
         # valid response, we joined a chatroom
-        JOINED = True
+        CURRENT_CHATROOM = chatroom
         print("[DEBUG] Joined a chatroom")
         message = response.strip('{M:|::\r\n}').split(':')
         msid = message[0]
         users = [(name, address, int(port)) for
                  name, address, port in
                  zip(message[1::3], message[2::3], message[3::3])]
+        global MEMBERS_LIST
+        MEMBERS_LIST = users
+        global POKE_THREAD
+        POKE_THREAD = listen_for_poke(1, "PokeListener")
+        POKE_THREAD.start()
+        global KEEPALIVE_THREAD
+        KEEPALIVE_THREAD = keepalive(1, "keepaliveThread", request)
+        KEEPALIVE_THREAD.start()
         # TODO: implement rest of join functionality, make nice outputstring
         return str(users)
 
@@ -301,6 +312,44 @@ def do_Join_(chatroom):
         # not a valid response
         print("[DEBUG] Did nothing receive valid response from server")
         return 'Error'
+    
+class keepalive(threading.Thread):
+    def __init__(self, threadID, name, joinMessage):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.joinMessage = joinMessage
+    def run(self):
+        global MY_SOCKET
+        if not MY_SOCKET:
+            error = connect_to_server()
+            if error:
+                return error
+
+        global MEMBERS_LIST
+        while True:
+            time.sleep(20)
+            try:
+                MY_SOCKET.send(bytes(self.joinMessage, 'ascii'))
+            except Exception as e:
+                print("[CLIENT_ERROR] Could not send JOIN request:\n" + str(e))
+                return 'Error'
+            
+            try:
+                response = MY_SOCKET.recv(1000).decode('ascii')
+            except Exception as e:
+                print("[CLIENT_ERROR] Did nothing receive anything")
+                return 'Error'
+            if response.startswith('M:') and response.endswith(':\r\n'):
+                # valid response, we joined a chatroom
+                print("[DEBUG] Refreshed connection")
+                message = response.strip('{M:|::\r\n}').split(':')
+                msid = message[0]
+                users = [(name, address, int(port)) for
+                        name, address, port in
+                        zip(message[1::3], message[2::3], message[3::3])]
+                MEMBERS_LIST = users
+                CmdWin.insert(1.0, str(users))
 
 
 def do_Send():
@@ -334,8 +383,62 @@ def do_Poke():
     as the Command Window). More details on the interactions will be covered
     in the communication protocol section.
     """
-    CmdWin.insert(1.0, "\nPress Poke")
+    nickname = userentry.get()
+    outstr = "\nPress Poke" + do_Poke_(nickname)
+    CmdWin.insert(1.0, outstr)
+    userentry.delete(0, END)
 
+def do_Poke_(nickname):
+    """
+    Helper function for do_Poke function.
+    """
+    print('[DEBUG] Attempting to poke user')
+    global CURRENT_CHATROOM
+    if not CURRENT_CHATROOM:
+        print("[DEBUG] Not in a chatroom yet")
+        return "You're not in a chatroom yet"
+    global MEMBERS_LIST
+    if not nickname:
+        print("[DEBUG] No user specified")
+        return str(MEMBERS_LIST)
+    global USERNAME
+    if nickname == USERNAME:
+        print("[DEBUG] Attempted to poke self")
+        return 'You can\'t poke yourself'
+    
+    recipient = None
+    for (name, address, port) in MEMBERS_LIST:
+        if nickname == name:
+            recipient = (address, port)
+            break
+    if not recipient:
+        print("[DEBUG] Name not in MEMBERS_LIST")
+        return 'Selected user isn\'t in the list of members'
+        
+    print("[DEBUG] Before defining socket")
+    recipientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    request = ("K:" + CURRENT_CHATROOM + ":" + USERNAME + "::\r\n")
+    try:
+        print("[DEBUG] Before sending bytes")
+        recipientSocket.sendto(bytes(request, 'ascii'), recipient)
+        print("[DEBUG] After Sending Bytes")
+    except Exception as e:
+        print("[CLIENT_ERROR] Could not send Poke:\n" + str(e))
+        return 'Error'
+    
+    try:
+        print("[DEBUG] Before receiving response")
+        response, server = recipientSocket.recvfrom(1000)
+        response = response.decode('ascii')
+        print("[DEBUG] After response")
+    except Exception as e:
+        print("[CLIENT_ERROR] Poke Unsuccessful " + str(e))
+        return 'Error'
+    if response == "A::\r\n":
+        print("[DEBUG] Successful poke")
+        return "Successfully poked " + nickname
+    return response
 
 def do_Quit():
     """
@@ -343,9 +446,56 @@ def do_Quit():
     to exit from the program. Before termination, the P2PChat program closes
     all TCP connections and releases all resources.
     """
+    global MY_SOCKET
+    if MY_SOCKET:
+        MY_SOCKET.close()
+    global POKE_SOCKET
+    if POKE_SOCKET:
+        POKE_SOCKET.close()
+        POKE_THREAD.join()
     CmdWin.insert(1.0, "\nPress Quit")
     sys.exit(0)
 
+class listen_for_poke(threading.Thread):
+    def __init__(self, threadID, name):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+    def run(self):
+        print ("Starting " + self.name)
+        global POKE_SOCKET
+        if not POKE_SOCKET:
+            error = setup_poke_socket()
+        while True:
+            try:
+                message, sender = POKE_SOCKET.recvfrom(1000)
+                message = message.decode('ascii')
+            except Exception as e:
+                print("[LISTENER_ERROR] Error receiving poke " + str(e))
+                return
+            if message.startswith('K:') and message.endswith(':\r\n'):
+                message = message.strip('{K:|::\r\n}').split(':')
+                CmdWin.insert(1.0, "Poke from " + message[1] + " in chatroom " + message[0])
+                try:
+                    POKE_SOCKET.sendto(bytes("A::\r\n", 'ascii'), sender)
+                except Exception as e:
+                    print("[LISTENER_ERROR] Error sending confirmation " + str(e))
+
+def setup_poke_socket():
+    global MY_PORT
+    print('[DEBUG] Establishing new connection to server.')
+    # create new_username socket, bind and connect
+    pokeSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        pokeSocket.bind(('', MY_PORT))
+    except Exception as e:
+        pokeSocket.close()
+        print('[CLIENT_ERROR] Could not bind specified port:\n' + str(e))
+        return 'Error'
+
+    global POKE_SOCKET
+    POKE_SOCKET = pokeSocket
+    return False
 
 #
 # Set up of Basic UI
