@@ -255,10 +255,11 @@ def do_Join():
     section.
     """
     chatroom = userentry.get()
-    outstr = "\n" + do_Join_(chatroom) + "\n"
+    string, success = do_Join_(chatroom)
+    outstr = "\n" + string + "\n"
     CmdWin.insert(1.0, outstr)
-    userentry.delete(0, END)
-
+    if success:
+        userentry.delete(0, END)
 
 def do_Join_(chatroom):
     """
@@ -269,21 +270,21 @@ def do_Join_(chatroom):
     global CURRENT_CHATROOM
     if CURRENT_CHATROOM:
         print('[DEBUG] Already joined chatroom.')
-        return 'You already joined a chatroom.'
+        return 'You already joined a chatroom.', True
     global USERNAME
     if not USERNAME:
         print('[DEBUG] No username, aborting join.')
-        return 'Specify username before joining chatrooms.'
+        return 'Specify username before joining chatrooms.', True
     # check if user gave us a chatroom name
     if not chatroom:
         print('[DEBUG] No chatroom name given.')
-        return 'Specify name of the chatroom to join.'
+        return 'Specify name of the chatroom to join.', True
     # check, if we are already connected to a server
     global MY_SOCKET
     if not MY_SOCKET:
         error = connect_to_server()
         if error:
-            return error
+            return error, False
 
     # send JOIN request to server
     my_address = MY_SOCKET.getsockname()
@@ -293,13 +294,13 @@ def do_Join_(chatroom):
         MY_SOCKET.send(bytes(request, 'ascii'))
     except Exception as e:
         print("[CLIENT_ERROR] Could not send JOIN request:\n" + str(e))
-        return 'Error'
+        return 'Error', False
 
     try:
         response = MY_SOCKET.recv(1000).decode('ascii')
     except Exception as e:
         print("[CLIENT_ERROR] Did not receive anything.")
-        return 'Error'
+        return 'Error', False
     if response.startswith('M:') and response.endswith(':\r\n'):
         # valid response, we joined a chatroom
         CURRENT_CHATROOM = chatroom
@@ -319,16 +320,16 @@ def do_Join_(chatroom):
         KEEPALIVE_THREAD.start()
         # TODO: implement rest of join functionality, make nice outputstring
         return ('Successfully joined chatroom.\nList of members:\n' +
-                '\n'.join(["%s\t\t%s\t\t%d" % u for u in users]))
+                '\n'.join(["%s\t\t%s\t\t%d" % u for u in users])), True
 
     elif response.startswith('F:') and response.endswith(':\r\n'):
         # error message
-        return response.strip('{M:|::\r\n}')
+        return response.strip('{M:|::\r\n}'), False
 
     else:
         # not a valid response
         print("[DEBUG] Did nothing receive valid response from server")
-        return 'Error'
+        return 'Error', False
 
 
 class keepalive(threading.Thread):
@@ -371,7 +372,8 @@ class keepalive(threading.Thread):
                             name, address, port in
                             zip(message[1::3], message[2::3], message[3::3])]
                     MEMBERS_LIST = users
-                    CmdWin.insert(1.0, str(users))
+                    CmdWin.delete('1.0', END)
+                    CmdWin.insert(1.0, 'List of members:\n' + '\n'.join(["%s\t\t%s\t\t%d" % u for u in users]))
 
 
 def do_Send():
@@ -406,7 +408,7 @@ def do_Poke():
     in the communication protocol section.
     """
     nickname = userentry.get()
-    outstr = "\nPress Poke" + do_Poke_(nickname)
+    outstr = "\nPress Poke\n" + do_Poke_(nickname)
     CmdWin.insert(1.0, outstr)
     userentry.delete(0, END)
 
@@ -423,11 +425,11 @@ def do_Poke_(nickname):
     global MEMBERS_LIST
     if not nickname:
         print("[DEBUG] No user specified")
-        return str(MEMBERS_LIST)
+        return 'Choose a user to poke\n'
     global USERNAME
     if nickname == USERNAME:
         print("[DEBUG] Attempted to poke self")
-        return 'You can\'t poke yourself'
+        return 'You can\'t poke yourself\n'
 
     recipient = None
     for (name, address, port) in MEMBERS_LIST:
@@ -436,7 +438,7 @@ def do_Poke_(nickname):
             break
     if not recipient:
         print("[DEBUG] Name not in MEMBERS_LIST")
-        return 'Selected user isn\'t in the list of members'
+        return 'Selected user isn\'t in the list of members\n'
 
     print("[DEBUG] Before defining socket")
     recipientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -448,7 +450,7 @@ def do_Poke_(nickname):
         print("[DEBUG] After Sending Bytes")
     except Exception as e:
         print("[CLIENT_ERROR] Could not send Poke:\n" + str(e))
-        return 'Error'
+        return 'Error\n'
 
     try:
         print("[DEBUG] Before receiving response")
@@ -457,10 +459,10 @@ def do_Poke_(nickname):
         print("[DEBUG] After response")
     except Exception as e:
         print("[CLIENT_ERROR] Poke Unsuccessful " + str(e))
-        return 'Error'
+        return 'Error\n'
     if response == "A::\r\n":
         print("[DEBUG] Successful poke")
-        return "Successfully poked " + nickname
+        return "Successfully poked " + nickname + '\n'
     return response
 
 
