@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
-# Student name and No.:
-# Student name and No.:
-# Development platform:
-# Python version:
-# Version:
+# Student name and No.: Simon Howard 3035614018
+# Student name and No.: Florian Eichin 3035524902
+# Development platform: Mac OS/Linux
+# Python version: 3.7.x
+# Version: 0.1
 
 
+import re
 from tkinter import *
 import sys
 import socket
@@ -65,7 +66,7 @@ def do_User():
     sentinel symbol in our prototol).
     """
     new_username = userentry.get()
-    outstr = do_User_(new_username) + '\n'
+    outstr = '\n' + do_User_(new_username) + '\n'
     CmdWin.insert(1.0, outstr)
     userentry.delete(0, END)
 
@@ -79,6 +80,7 @@ def do_User_(username):
     Here are the testcases for Stage one (doctest has a problem with
     global variables right now, not sure how to make these tests pass)
 
+    TODO: update testcases
     >>> do_User_('')
     'Invalid username: Cannot be empty'
     >>> USERNAME == ''
@@ -97,9 +99,22 @@ def do_User_(username):
     # did client already join a chatroom?
     if CURRENT_CHATROOM:
         return 'Could not change username: Already joined'
-    # do we have a valid username? We can include further checks here
+    # do we have a valid username?
+    # I split up all their cases from one regex to multiple checks
+    # in order to provide better feedack to their user.
     if not username:
-        return 'Invalid username: Cannot be empty'
+        return 'Invalid username: Empty'
+    if username.find(':') > -1:
+        # name contains ':'
+        return 'Invalid username: Contains :'
+    if re.findall('\s', username):
+        # name contains whitespace
+        return 'Invalid username: Contains whitespace'
+    if len(username) > 32:
+        return 'Invalid username: Too long (maximum is 32 characters)'
+    if not all([ord(c) >= 0 and ord(c) <= 127 for c in username]):
+        # ord() returns encoding of characters, ascii is <128
+        return 'Invalid username: Contains non-ASCII characters'
     global USERNAME
     USERNAME = username
     return 'Succesfully changed username to: %s' % USERNAME
@@ -113,7 +128,7 @@ def do_List():
     chatroom groups from the Room server, the program outputs the chatroom
     names to the Command Window.
     """
-    outstr = "\nPress List\n" + do_List_()
+    outstr = "\n" + do_List_() + "\n"
     CmdWin.insert(1.0, outstr)
 
 
@@ -215,6 +230,7 @@ def decode_list(response):
         # not a valid response, do nothing
         print('[DEBUG] Did not receive a valid response from server: \n'
               + response)
+        return 'Error'
 
 
 def do_Join():
@@ -239,7 +255,7 @@ def do_Join():
     section.
     """
     chatroom = userentry.get()
-    outstr = "\n Press JOIN\n" + do_Join_(chatroom)
+    outstr = "\n" + do_Join_(chatroom) + "\n"
     CmdWin.insert(1.0, outstr)
     userentry.delete(0, END)
 
@@ -248,19 +264,19 @@ def do_Join_(chatroom):
     """
     Helper function for do_Join function. TODO
     """
-    print('[DEBUG] Attempting to join chatroom')
+    print('[DEBUG] Attempting to join chatroom.')
     # check, if we are already in a chatroom or have a username
     global CURRENT_CHATROOM
     if CURRENT_CHATROOM:
-        print('[DEBUG] Already joined chatroom')
+        print('[DEBUG] Already joined chatroom.')
         return 'You already joined a chatroom.'
     global USERNAME
     if not USERNAME:
-        print('[DEBUG] No username, aborting join')
+        print('[DEBUG] No username, aborting join.')
         return 'Specify username before joining chatrooms.'
     # check if user gave us a chatroom name
     if not chatroom:
-        print('[DEBUG] No chatroom name given')
+        print('[DEBUG] No chatroom name given.')
         return 'Specify name of the chatroom to join.'
     # check, if we are already connected to a server
     global MY_SOCKET
@@ -282,14 +298,14 @@ def do_Join_(chatroom):
     try:
         response = MY_SOCKET.recv(1000).decode('ascii')
     except Exception as e:
-        print("[CLIENT_ERROR] Did nothing receive anything")
+        print("[CLIENT_ERROR] Did not receive anything.")
         return 'Error'
     if response.startswith('M:') and response.endswith(':\r\n'):
         # valid response, we joined a chatroom
         CURRENT_CHATROOM = chatroom
-        print("[DEBUG] Joined a chatroom")
+        print("[DEBUG] Joined a chatroom.")
         message = response.strip('{M:|::\r\n}').split(':')
-        msid = message[0]
+        # msid = message[0]
         users = [(name, address, int(port)) for
                  name, address, port in
                  zip(message[1::3], message[2::3], message[3::3])]
@@ -302,7 +318,8 @@ def do_Join_(chatroom):
         KEEPALIVE_THREAD = keepalive(1, "keepaliveThread", request)
         KEEPALIVE_THREAD.start()
         # TODO: implement rest of join functionality, make nice outputstring
-        return str(users)
+        return ('Successfully joined chatroom.\nList of members:\n' +
+                '\n'.join(["%s\t\t%s\t\t%d" % u for u in users]))
 
     elif response.startswith('F:') and response.endswith(':\r\n'):
         # error message
@@ -312,7 +329,8 @@ def do_Join_(chatroom):
         # not a valid response
         print("[DEBUG] Did nothing receive valid response from server")
         return 'Error'
-    
+
+
 class keepalive(threading.Thread):
     def __init__(self, threadID, name, joinMessage):
         threading.Thread.__init__(self)
@@ -320,6 +338,7 @@ class keepalive(threading.Thread):
         self.name = name
         self.event = threading.Event()
         self.joinMessage = joinMessage
+
     def run(self):
         global MY_SOCKET
         if not MY_SOCKET:
@@ -391,6 +410,7 @@ def do_Poke():
     CmdWin.insert(1.0, outstr)
     userentry.delete(0, END)
 
+
 def do_Poke_(nickname):
     """
     Helper function for do_Poke function.
@@ -408,7 +428,7 @@ def do_Poke_(nickname):
     if nickname == USERNAME:
         print("[DEBUG] Attempted to poke self")
         return 'You can\'t poke yourself'
-    
+
     recipient = None
     for (name, address, port) in MEMBERS_LIST:
         if nickname == name:
@@ -417,7 +437,7 @@ def do_Poke_(nickname):
     if not recipient:
         print("[DEBUG] Name not in MEMBERS_LIST")
         return 'Selected user isn\'t in the list of members'
-        
+
     print("[DEBUG] Before defining socket")
     recipientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -429,7 +449,7 @@ def do_Poke_(nickname):
     except Exception as e:
         print("[CLIENT_ERROR] Could not send Poke:\n" + str(e))
         return 'Error'
-    
+
     try:
         print("[DEBUG] Before receiving response")
         response, server = recipientSocket.recvfrom(1000)
@@ -442,6 +462,7 @@ def do_Poke_(nickname):
         print("[DEBUG] Successful poke")
         return "Successfully poked " + nickname
     return response
+
 
 def do_Quit():
     """
@@ -464,13 +485,16 @@ def do_Quit():
     CmdWin.insert(1.0, "\nPress Quit")
     sys.exit(0)
 
+
 class listen_for_poke(threading.Thread):
+
     def __init__(self, threadID, name):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
+
     def run(self):
-        print ("Starting " + self.name)
+        print("Starting " + self.name)
         global POKE_SOCKET
         if not POKE_SOCKET:
             error = setup_poke_socket()
@@ -483,11 +507,15 @@ class listen_for_poke(threading.Thread):
                 return
             if message.startswith('K:') and message.endswith(':\r\n'):
                 message = message.strip('{K:|::\r\n}').split(':')
-                CmdWin.insert(1.0, "Poke from " + message[1] + " in chatroom " + message[0])
+                CmdWin.insert(1.0,
+                              ("Poke from " + message[1] +
+                               " in chatroom " + message[0]))
                 try:
                     POKE_SOCKET.sendto(bytes("A::\r\n", 'ascii'), sender)
                 except Exception as e:
-                    print("[LISTENER_ERROR] Error sending confirmation " + str(e))
+                    print("[LISTENER_ERROR] Error sending confirmation "
+                          + str(e))
+
 
 def setup_poke_socket():
     global MY_PORT
@@ -504,6 +532,7 @@ def setup_poke_socket():
     global POKE_SOCKET
     POKE_SOCKET = pokeSocket
     return False
+
 
 #
 # Set up of Basic UI
