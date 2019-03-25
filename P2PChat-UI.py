@@ -318,6 +318,7 @@ class keepalive(threading.Thread):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
+        self.event = threading.Event()
         self.joinMessage = joinMessage
     def run(self):
         global MY_SOCKET
@@ -328,28 +329,30 @@ class keepalive(threading.Thread):
 
         global MEMBERS_LIST
         while True:
-            time.sleep(20)
-            try:
-                MY_SOCKET.send(bytes(self.joinMessage, 'ascii'))
-            except Exception as e:
-                print("[CLIENT_ERROR] Could not send JOIN request:\n" + str(e))
-                return 'Error'
-            
-            try:
-                response = MY_SOCKET.recv(1000).decode('ascii')
-            except Exception as e:
-                print("[CLIENT_ERROR] Did nothing receive anything")
-                return 'Error'
-            if response.startswith('M:') and response.endswith(':\r\n'):
-                # valid response, we joined a chatroom
-                print("[DEBUG] Refreshed connection")
-                message = response.strip('{M:|::\r\n}').split(':')
-                msid = message[0]
-                users = [(name, address, int(port)) for
-                        name, address, port in
-                        zip(message[1::3], message[2::3], message[3::3])]
-                MEMBERS_LIST = users
-                CmdWin.insert(1.0, str(users))
+            if self.event.wait(20):
+                return
+            else:
+                try:
+                    MY_SOCKET.send(bytes(self.joinMessage, 'ascii'))
+                except Exception as e:
+                    print("[CLIENT_ERROR] Could not send JOIN request:\n" + str(e))
+                    return 'Error'
+                
+                try:
+                    response = MY_SOCKET.recv(1000).decode('ascii')
+                except Exception as e:
+                    print("[CLIENT_ERROR] Did nothing receive anything")
+                    return 'Error'
+                if response.startswith('M:') and response.endswith(':\r\n'):
+                    # valid response, we joined a chatroom
+                    print("[DEBUG] Refreshed connection")
+                    message = response.strip('{M:|::\r\n}').split(':')
+                    msid = message[0]
+                    users = [(name, address, int(port)) for
+                            name, address, port in
+                            zip(message[1::3], message[2::3], message[3::3])]
+                    MEMBERS_LIST = users
+                    CmdWin.insert(1.0, str(users))
 
 
 def do_Send():
@@ -449,7 +452,12 @@ def do_Quit():
     global MY_SOCKET
     if MY_SOCKET:
         MY_SOCKET.close()
+    global KEEPALIVE_THREAD
+    if KEEPALIVE_THREAD:
+        KEEPALIVE_THREAD.event.set()
+        KEEPALIVE_THREAD.join()
     global POKE_SOCKET
+    global POKE_THREAD
     if POKE_SOCKET:
         POKE_SOCKET.close()
         POKE_THREAD.join()
