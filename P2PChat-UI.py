@@ -139,26 +139,26 @@ def do_Join():
         response = join_request()
         if response.startswith('M:') and response.endswith(':\r\n'):
             # valid response, we joined a chatroom
-            print("[DEBUG] Joined a chatroom.")
+            print('[DEBUG] Joined a chatroom.')
             global MY_HASH
             global MY_SOCKET
             my_address = MY_SOCKET.getsockname()
             global MY_PORT
             MY_HASH = sdbm_hash(USERNAME + my_address[0] + str(MY_PORT))
             global POKE_THREAD
-            POKE_THREAD = poke_listener(1, "pokeListenerThread")
+            POKE_THREAD = poke_listener(1, 'pokeListenerThread')
             POKE_THREAD.start()
             global KEEPALIVE_THREAD
-            KEEPALIVE_THREAD = keepalive(1, "keepaliveThread")
+            KEEPALIVE_THREAD = keepalive(1, 'keepaliveThread')
             KEEPALIVE_THREAD.start()
             global BACKWARD_LINK_THREAD
-            BACKWARD_LINK_THREAD = backward_link_listener(1, "backwardLinkListenerThread")
+            BACKWARD_LINK_THREAD = backward_link_listener(1, 'backwardLinkListenerThread')
             BACKWARD_LINK_THREAD.start()
             # TODO: implement rest of join functionality, make nice outputstring
             global MEMBERS_LIST
-            CmdWin.insert(1.0, 'Successfully joined chatroom.\nList of members:\n' + '\n'.join(["%s\t\t%s\t\t%d" % u[0:3] for u in MEMBERS_LIST]))
+            CmdWin.insert(1.0, 'Successfully joined chatroom.\nList of members:\n' + '\n'.join(['%s\t\t%s\t\t%d' % u[0:3] for u in MEMBERS_LIST]))
             global FORWARD_LINK_THREAD
-            FORWARD_LINK_THREAD = connect_to_peers(1, "connectToPeersThread")
+            FORWARD_LINK_THREAD = connect_to_peers(1, 'connectToPeersThread')
             FORWARD_LINK_THREAD.start()
         elif response.startswith('F:') and response.endswith(':\r\n'):
             # error message
@@ -167,7 +167,7 @@ def do_Join():
             CmdWin.insert(1.0, error)
         else:
             # not a valid response
-            print("[DEBUG] Did nothing receive valid response from server")
+            print('[DEBUG] Did nothing receive valid response from server')
             CmdWin.insert(1.0, 'Error')
 
 def do_Send():
@@ -183,7 +183,7 @@ def do_Send():
     500 bytes, but it is possible that the ‘:’ character may appear as text
     content in the message.
     """
-    CmdWin.insert(1.0, "\nPress Send")
+    CmdWin.insert(1.0, '\nPress Send')
 
 def do_Poke():
     """
@@ -204,30 +204,30 @@ def do_Poke():
     print('[DEBUG] Attempting to poke user')
     recipient = get_recipient(nickname)
     if recipient:
-        print("[DEBUG] Before defining socket")
+        print('[DEBUG] Before defining socket')
         recipient_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        request = ("K:" + CURRENT_CHATROOM + ":" + USERNAME + "::\r\n")
+        request = ('K:' + CURRENT_CHATROOM + ':' + USERNAME + '::\r\n')
         try:
-            print("[DEBUG] Before sending bytes")
+            print('[DEBUG] Before sending bytes')
             recipient_socket.sendto(bytes(request, 'ascii'), recipient)
-            print("[DEBUG] After Sending Bytes")
+            print('[DEBUG] After Sending Bytes')
         except Exception as e:
-            print("[POKE_ERROR] Could not send Poke:\n" + str(e))
+            print('[POKE_ERROR] Could not send Poke:\n' + str(e))
             CmdWin.insert(1.0, 'Error\n')
             return
 
         try:
-            print("[DEBUG] Before receiving response")
+            print('[DEBUG] Before receiving response')
             response, server = recipient_socket.recvfrom(1000)
             response = response.decode('ascii')
-            print("[DEBUG] After response")
+            print('[DEBUG] After response')
         except Exception as e:
-            print("[POKE_ERROR] Poke Unsuccessful " + str(e))
+            print('[POKE_ERROR] Poke Unsuccessful ' + str(e))
             CmdWin.insert(1.0, 'Error\n')
             return
-        if response == "A::\r\n":
-            print("[DEBUG] Successful poke")
-            CmdWin.insert(1.0, "Successfully poked " + nickname + '\n')
+        if response == 'A::\r\n':
+            print('[DEBUG] Successful poke')
+            CmdWin.insert(1.0, 'Successfully poked ' + nickname + '\n')
         userentry.delete(0, END)
 
 def do_Quit():
@@ -257,7 +257,7 @@ def do_Quit():
         FORWARD_LINK_THREAD.event.set()
         FORWARD_LINK_THREAD.join()
     global BACKWARD_LINKS
-    if BACKWARD_LINKS:
+    if len(BACKWARD_LINKS) > 0:
         for hash, socket in BACKWARD_LINKS:
             socket.close()
     global BACKWARD_LINK_SOCKET
@@ -267,7 +267,7 @@ def do_Quit():
     if BACKWARD_LINK_THREAD:
         BACKWARD_LINK_THREAD.join()
     
-    CmdWin.insert(1.0, "\nPress Quit")
+    CmdWin.insert(1.0, '\nPress Quit')
     sys.exit(0)
 
 class connect_to_peers(threading.Thread):
@@ -300,9 +300,9 @@ def attempt_forward_peer_connection(thread):
                 global MSGID
                 global MY_PORT
                 global CURRENT_CHATROOM
-                request = ("P:" + CURRENT_CHATROOM + ":" + USERNAME + ":" + my_address[0] + ":" + str(MY_PORT) + ":" + str(MSGID) + "::\r\n")
-                send_message(FORWARD_LINK_SOCKET, request, "FORWARD PEER")
-                response = receive_message(FORWARD_LINK_SOCKET, "FORWARD PEER")
+                request = ('P:' + CURRENT_CHATROOM + ':' + USERNAME + ':' + my_address[0] + ':' + str(MY_PORT) + ':' + str(MSGID) + '::\r\n')
+                send_message(FORWARD_LINK_SOCKET, request, 'FORWARD PEER')
+                response = receive_message(FORWARD_LINK_SOCKET, 'FORWARD PEER')
                 if response:
                     if response.startswith('S:') and response.endswith(':\r\n'):
                         break
@@ -314,7 +314,7 @@ def attempt_forward_peer_connection(thread):
             else:
                 start = (start + 1) % len(MEMBERS_LIST)
     if not FORWARD_LINK_SOCKET:
-        print("[CLIENT ERROR] Complete failure to establish forward link")
+        print('[CLIENT ERROR] Complete failure to establish forward link')
         CmdWin.insert(1.0, 'There might not be anyone to connect to, will try again in twenty seconds.')
         if thread.event.wait(20):
             return
@@ -344,15 +344,15 @@ class backward_link_listener(threading.Thread):
                 except Exception as e:
                     print('[DEBUG] Error accepting backward link')
                     return
-                response = receive_message(conn, "BACKWARD PEER")
+                response = receive_message(conn, 'BACKWARD PEER')
                 join_request()
-                if response.startswith("P:") and response.endswith(":\r\n"):
-                    message = response.strip("{P:|::\r\n}").split(":")
+                if response.startswith('P:') and response.endswith(':\r\n'):
+                    message = response.strip('{P:|::\r\n}').split(':')
                     found = False
                     for member in MEMBERS_LIST:
                         if message[1] == member[0]:
-                            request = ("S:" + str(MSGID) + "::\r\n")
-                            send_message(conn, request, "BACKWARD PEER")
+                            request = ('S:' + str(MSGID) + '::\r\n')
+                            send_message(conn, request, 'BACKWARD PEER')
                             BACKWARD_LINKS[member[3]] = conn
                     if not found:
                         conn.close()
@@ -381,10 +381,10 @@ class keepalive(threading.Thread):
                     response = join_request()
                     if response.startswith('M:') and response.endswith(':\r\n'):
                         # valid response, we joined a chatroom
-                        print("[DEBUG] Refreshed connection")
+                        print('[DEBUG] Refreshed connection')
                         CmdWin.delete('1.0', END)
                         global MEMBERS_LIST
-                        CmdWin.insert(1.0, 'List of members:\n' + '\n'.join(["%s\t\t%s\t\t%d" % u[0:3] for u in MEMBERS_LIST]))
+                        CmdWin.insert(1.0, 'List of members:\n' + '\n'.join(['%s\t\t%s\t\t%d' % u[0:3] for u in MEMBERS_LIST]))
 
 class poke_listener(threading.Thread):
 
@@ -394,27 +394,27 @@ class poke_listener(threading.Thread):
         self.name = name
 
     def run(self):
-        print("[DEBUG] Starting " + self.name)
+        print('[DEBUG] Starting ' + self.name)
         global POKE_SOCKET
         if not POKE_SOCKET:
             error = setup_poke_socket()
             if error:
-                print("[LISTENER ERROR] Error setting up poke socket")
+                print('[LISTENER ERROR] Error setting up poke socket')
                 return
         while True:
             try:
                 message, sender = POKE_SOCKET.recvfrom(1000)
                 message = message.decode('ascii')
             except Exception as e:
-                print("[LISTENER_ERROR] Error receiving poke " + str(e))
+                print('[LISTENER_ERROR] Error receiving poke ' + str(e))
                 return
             if message.startswith('K:') and message.endswith(':\r\n'):
                 message = message.strip('{K:|::\r\n}').split(':')
-                CmdWin.insert(1.0, "Poke from " + message[1] + " in chatroom " + message[0])
+                CmdWin.insert(1.0, 'Poke from ' + message[1] + ' in chatroom ' + message[0])
                 try:
-                    POKE_SOCKET.sendto(bytes("A::\r\n", 'ascii'), sender)
+                    POKE_SOCKET.sendto(bytes('A::\r\n', 'ascii'), sender)
                 except Exception as e:
-                    print("[LISTENER_ERROR] Error sending confirmation " + str(e))
+                    print('[LISTENER_ERROR] Error sending confirmation ' + str(e))
 
 def decode_list(response):
     """
@@ -512,17 +512,17 @@ def can_update_username(username):
 def get_recipient(nickname):
     global CURRENT_CHATROOM
     if not CURRENT_CHATROOM:
-        print("[DEBUG] Not in a chatroom yet")
-        CmdWin.insert(1.0, "You're not in a chatroom yet")
+        print('[DEBUG] Not in a chatroom yet')
+        CmdWin.insert(1.0, 'You\'re not in a chatroom yet')
         return None
     global MEMBERS_LIST
     if not nickname:
-        print("[DEBUG] No user specified")
+        print('[DEBUG] No user specified')
         CmdWin.insert(1.0, 'Choose a user to poke\n')
         return None
     global USERNAME
     if nickname == USERNAME:
-        print("[DEBUG] Attempted to poke self")
+        print('[DEBUG] Attempted to poke self')
         CmdWin.insert(1.0, 'You can\'t poke yourself\n')
         return None
 
@@ -530,7 +530,7 @@ def get_recipient(nickname):
     for (name, address, port, hashID) in MEMBERS_LIST:
         if nickname == name:
             return (address, port)
-    print("[DEBUG] Name not in MEMBERS_LIST")
+    print('[DEBUG] Name not in MEMBERS_LIST')
     CmdWin.insert(1.0, 'Selected user isn\'t in the list of members\n')
     return None
 
@@ -546,9 +546,9 @@ def join_request():
         global CURRENT_CHATROOM
         my_address = MY_SOCKET.getsockname()
         global MY_PORT
-        request = ("J:" + CURRENT_CHATROOM + ":" + USERNAME + ":" + my_address[0] + ":" + str(MY_PORT) + "::\r\n")
-        send_message(MY_SOCKET, request, "JOIN")
-        response = receive_message(MY_SOCKET, "JOIN")
+        request = ('J:' + CURRENT_CHATROOM + ':' + USERNAME + ':' + my_address[0] + ':' + str(MY_PORT) + '::\r\n')
+        send_message(MY_SOCKET, request, 'JOIN')
+        response = receive_message(MY_SOCKET, 'JOIN')
         if response.startswith('M:') and response.endswith(':\r\n'):
             message = response.strip('{M:|::\r\n}').split(':')
             update_members_list(message)
@@ -614,7 +614,7 @@ def setup_poke_socket():
 # Set up of Basic UI
 #
 win = Tk()
-win.title("MyP2PChat")
+win.title('MyP2PChat')
 
 # Top Frame for Message display
 topframe = Frame(win, relief=RAISED, borderwidth=1)
