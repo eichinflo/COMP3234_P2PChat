@@ -257,7 +257,7 @@ def do_Quit():
         FORWARD_LINK_THREAD.event.set()
         FORWARD_LINK_THREAD.join()
     global BACKWARD_LINKS
-    if len(BACKWARD_LINKS) > 0:
+    if len(BACKWARD_LINKS) > 1:
         for hash, socket in BACKWARD_LINKS:
             socket.close()
     global BACKWARD_LINK_SOCKET
