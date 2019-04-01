@@ -12,7 +12,7 @@ from tkinter import *
 import sys
 import socket
 import threading
-import time
+# import time
 
 #
 # Global variables
@@ -79,6 +79,7 @@ def do_User():
         CmdWin.insert(1.0, 'Succesfully changed username to: %s' % USERNAME)
         userentry.delete(0, END)
 
+
 def do_List():
     """
     This function implements the [List]-button:
@@ -92,15 +93,16 @@ def do_List():
     global SERVER_PORT
     if not MY_SOCKET:
         MY_SOCKET = socket.socket()
-        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS, SERVER_PORT, 'KEEPALIVE')
-    
+        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS,
+                                   SERVER_PORT, 'KEEPALIVE')
+
     if MY_SOCKET:
         # send list request
         print('[DEBUG] Sending LIST request.')
         send_message(MY_SOCKET, 'L::\r\n', 'LIST')
         response = receive_message(MY_SOCKET, 'LIST')
 
-        # decode_list returns a list object with contents endswi boolean that is
+        # decode_list returns a list object with contents and boolean that is
         # True iff we received an error message from the server
         message, error_occured = decode_list(response)
         if error_occured:
@@ -109,6 +111,7 @@ def do_List():
         else:
             print('[DEBUG] Succesfully received list of names.')
             CmdWin.insert(1.0, '\n'.join(message))
+
 
 def do_Join():
     """
@@ -152,11 +155,14 @@ def do_Join():
             KEEPALIVE_THREAD = keepalive(1, 'keepaliveThread')
             KEEPALIVE_THREAD.start()
             global BACKWARD_LINK_THREAD
-            BACKWARD_LINK_THREAD = backward_link_listener(1, 'backwardLinkListenerThread')
+            BACKWARD_LINK_THREAD = backward_link_listener(
+                1, 'backwardLinkListenerThread')
             BACKWARD_LINK_THREAD.start()
-            # TODO: implement rest of join functionality, make nice outputstring
             global MEMBERS_LIST
-            CmdWin.insert(1.0, 'Successfully joined chatroom.\nList of members:\n' + '\n'.join(['%s\t\t%s\t\t%d' % u[0:3] for u in MEMBERS_LIST]))
+            CmdWin.insert(1.0, 'Successfully joined chatroom.\n' +
+                          'List of members:\n' +
+                          '\n'.join(['%s\t\t%s\t\t%d'
+                                     % u[0:3] for u in MEMBERS_LIST]))
             global FORWARD_LINK_THREAD
             FORWARD_LINK_THREAD = connect_to_peers(1, 'connectToPeersThread')
             FORWARD_LINK_THREAD.start()
@@ -169,6 +175,7 @@ def do_Join():
             # not a valid response
             print('[DEBUG] Did nothing receive valid response from server')
             CmdWin.insert(1.0, 'Error')
+
 
 def do_Send():
     """
@@ -184,6 +191,7 @@ def do_Send():
     content in the message.
     """
     CmdWin.insert(1.0, '\nPress Send')
+
 
 def do_Poke():
     """
@@ -230,6 +238,7 @@ def do_Poke():
             CmdWin.insert(1.0, 'Successfully poked ' + nickname + '\n')
         userentry.delete(0, END)
 
+
 def do_Quit():
     """
     This function implements the [Quit]-button:
@@ -258,17 +267,18 @@ def do_Quit():
         FORWARD_LINK_THREAD.join()
     global BACKWARD_LINKS
     if len(BACKWARD_LINKS) > 1:
-        for hash, socket in BACKWARD_LINKS:
-            socket.close()
+        for hsh, sckt in BACKWARD_LINKS:
+            sckt.close()
     global BACKWARD_LINK_SOCKET
     if BACKWARD_LINK_SOCKET:
         BACKWARD_LINK_SOCKET.close()
     global BACKWARD_LINK_THREAD
     if BACKWARD_LINK_THREAD:
         BACKWARD_LINK_THREAD.join()
-    
+
     CmdWin.insert(1.0, '\nPress Quit')
     sys.exit(0)
+
 
 class connect_to_peers(threading.Thread):
     def __init__(self, threadID, name):
@@ -276,9 +286,10 @@ class connect_to_peers(threading.Thread):
         self.threadID = threadID
         self.name = name
         self.event = threading.Event()
-    
+
     def run(self):
         attempt_forward_peer_connection(self)
+
 
 def attempt_forward_peer_connection(thread):
     global MEMBERS_LIST
@@ -292,19 +303,27 @@ def attempt_forward_peer_connection(thread):
             start = (start + 1) % len(MEMBERS_LIST)
         else:
             FORWARD_LINK_SOCKET = socket.socket()
-            print('[FORWARD_LINK_DEBUG] connecting to (' + str(MEMBERS_LIST[start][1]) + ',' + str(MEMBERS_LIST[start][2]) + ')')
-            FORWARD_LINK_SOCKET = connect_socket(FORWARD_LINK_SOCKET, MEMBERS_LIST[start][1], MEMBERS_LIST[start][2], 'FORWARD_LINK')
+            print('[FORWARD_LINK_DEBUG] connecting to ('
+                  + str(MEMBERS_LIST[start][1]) + ','
+                  + str(MEMBERS_LIST[start][2]) + ')')
+            FORWARD_LINK_SOCKET = connect_socket(FORWARD_LINK_SOCKET,
+                                                 MEMBERS_LIST[start][1],
+                                                 MEMBERS_LIST[start][2],
+                                                 'FORWARD_LINK')
             if FORWARD_LINK_SOCKET:
                 global USERNAME
                 my_address = FORWARD_LINK_SOCKET.getsockname()
                 global MSGID
                 global MY_PORT
                 global CURRENT_CHATROOM
-                request = ('P:' + CURRENT_CHATROOM + ':' + USERNAME + ':' + my_address[0] + ':' + str(MY_PORT) + ':' + str(MSGID) + '::\r\n')
+                request = ('P:' + CURRENT_CHATROOM + ':' + USERNAME +
+                           ':' + my_address[0] + ':' + str(MY_PORT) +
+                           ':' + str(MSGID) + '::\r\n')
                 send_message(FORWARD_LINK_SOCKET, request, 'FORWARD PEER')
                 response = receive_message(FORWARD_LINK_SOCKET, 'FORWARD PEER')
                 if response:
-                    if response.startswith('S:') and response.endswith(':\r\n'):
+                    if response.startswith('S:') and response.endswith(
+                            ':\r\n'):
                         break
                     else:
                         FORWARD_LINK_SOCKET = None
@@ -315,11 +334,13 @@ def attempt_forward_peer_connection(thread):
                 start = (start + 1) % len(MEMBERS_LIST)
     if not FORWARD_LINK_SOCKET:
         print('[CLIENT ERROR] Complete failure to establish forward link')
-        CmdWin.insert(1.0, 'There might not be anyone to connect to, will try again in twenty seconds.')
+        CmdWin.insert(1.0, 'There might not be anyone to connect to,' +
+                      'will try again in twenty seconds.')
         if thread.event.wait(20):
             return
         attempt_forward_peer_connection(thread)
-    
+
+
 class backward_link_listener(threading.Thread):
     def __init__(self, threadID, name):
         threading.Thread.__init__(self)
@@ -332,7 +353,8 @@ class backward_link_listener(threading.Thread):
         global MY_PORT
         if not BACKWARD_LINK_SOCKET:
             BACKWARD_LINK_SOCKET = socket.socket()
-            BACKWARD_LINK_SOCKET = bind_socket(BACKWARD_LINK_SOCKET, MY_PORT, 'BACKWARD_LINK')
+            BACKWARD_LINK_SOCKET = bind_socket(BACKWARD_LINK_SOCKET,
+                                               MY_PORT, 'BACKWARD_LINK')
         if BACKWARD_LINK_SOCKET:
             global MEMBERS_LIST
             global MSGID
@@ -359,6 +381,7 @@ class backward_link_listener(threading.Thread):
                 else:
                     conn.close()
 
+
 class keepalive(threading.Thread):
     def __init__(self, threadID, name):
         threading.Thread.__init__(self)
@@ -372,19 +395,24 @@ class keepalive(threading.Thread):
         global SERVER_PORT
         if not MY_SOCKET:
             MY_SOCKET = socket.socket()
-            MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS, SERVER_PORT, 'KEEPALIVE')
+            MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS,
+                                       SERVER_PORT, 'KEEPALIVE')
         if MY_SOCKET:
             while True:
                 if self.event.wait(20):
                     return
                 else:
                     response = join_request()
-                    if response.startswith('M:') and response.endswith(':\r\n'):
+                    if response.startswith('M:') and response.endswith(
+                            ':\r\n'):
                         # valid response, we joined a chatroom
                         print('[DEBUG] Refreshed connection')
                         CmdWin.delete('1.0', END)
                         global MEMBERS_LIST
-                        CmdWin.insert(1.0, 'List of members:\n' + '\n'.join(['%s\t\t%s\t\t%d' % u[0:3] for u in MEMBERS_LIST]))
+                        CmdWin.insert(1.0, 'List of members:\n'
+                                      + '\n'.join(['%s\t\t%s\t\t%d' % u[0:3]
+                                                   for u in MEMBERS_LIST]))
+
 
 class poke_listener(threading.Thread):
 
@@ -410,11 +438,14 @@ class poke_listener(threading.Thread):
                 return
             if message.startswith('K:') and message.endswith(':\r\n'):
                 message = message.strip('{K:|::\r\n}').split(':')
-                CmdWin.insert(1.0, 'Poke from ' + message[1] + ' in chatroom ' + message[0])
+                CmdWin.insert(1.0, 'Poke from ' +
+                              message[1] + ' in chatroom ' + message[0])
                 try:
                     POKE_SOCKET.sendto(bytes('A::\r\n', 'ascii'), sender)
                 except Exception as e:
-                    print('[LISTENER_ERROR] Error sending confirmation ' + str(e))
+                    print('[LISTENER_ERROR] Error sending confirmation '
+                          + str(e))
+
 
 def decode_list(response):
     """
@@ -449,8 +480,10 @@ def decode_list(response):
         return ([response.strip('{F:|::\r\n}')], True)
     else:
         # not a valid response, do nothing
-        print('[DEBUG] Did not receive a valid response from server: \n' + response)
+        print('[DEBUG] Did not receive a valid response from server: \n'
+              + response)
         return 'Error'
+
 
 def can_join_chatroom(chatroom):
     global CURRENT_CHATROOM
@@ -474,11 +507,13 @@ def can_join_chatroom(chatroom):
     global SERVER_PORT
     if not MY_SOCKET:
         MY_SOCKET = socket.socket()
-        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS, SERVER_PORT, 'KEEPALIVE')
+        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS,
+                                   SERVER_PORT, 'KEEPALIVE')
     if MY_SOCKET:
         return True
     else:
         return False
+
 
 def can_update_username(username):
     global CURRENT_CHATROOM
@@ -501,13 +536,15 @@ def can_update_username(username):
         CmdWin.insert(1.0, 'Invalid username: Contains whitespace')
         return False
     if len(username) > 32:
-        CmdWin.insert(1.0, 'Invalid username: Too long (maximum is 32 characters)')
+        CmdWin.insert(1.0,
+                      'Invalid username: Too long (maximum is 32 characters)')
         return False
     if not all([ord(c) >= 0 and ord(c) <= 127 for c in username]):
         # ord() returns encoding of characters, ascii is <128
         CmdWin.insert(1.0,  'Invalid username: Contains non-ASCII characters')
         return False
     return True
+
 
 def get_recipient(nickname):
     global CURRENT_CHATROOM
@@ -526,7 +563,7 @@ def get_recipient(nickname):
         CmdWin.insert(1.0, 'You can\'t poke yourself\n')
         return None
 
-    recipient = None
+    # recipient = None
     for (name, address, port, hashID) in MEMBERS_LIST:
         if nickname == name:
             return (address, port)
@@ -534,25 +571,29 @@ def get_recipient(nickname):
     CmdWin.insert(1.0, 'Selected user isn\'t in the list of members\n')
     return None
 
+
 def join_request():
     global MY_SOCKET
     if not MY_SOCKET:
         global SERVER_ADDRESS
         global SERVER_PORT
         MY_SOCKET = socket.socket()
-        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS, SERVER_PORT, 'JOIN')
+        MY_SOCKET = connect_socket(MY_SOCKET, SERVER_ADDRESS,
+                                   SERVER_PORT, 'JOIN')
     if MY_SOCKET:
         global USERNAME
         global CURRENT_CHATROOM
         my_address = MY_SOCKET.getsockname()
         global MY_PORT
-        request = ('J:' + CURRENT_CHATROOM + ':' + USERNAME + ':' + my_address[0] + ':' + str(MY_PORT) + '::\r\n')
+        request = ('J:' + CURRENT_CHATROOM + ':' + USERNAME + ':'
+                   + my_address[0] + ':' + str(MY_PORT) + '::\r\n')
         send_message(MY_SOCKET, request, 'JOIN')
         response = receive_message(MY_SOCKET, 'JOIN')
         if response.startswith('M:') and response.endswith(':\r\n'):
             message = response.strip('{M:|::\r\n}').split(':')
             update_members_list(message)
         return response
+
 
 def bind_socket(new_socket, port, name):
     try:
@@ -565,6 +606,7 @@ def bind_socket(new_socket, port, name):
     print('[' + name + '_SUCCESS] Successfully bound port.')
     return new_socket
 
+
 def connect_socket(new_socket, hostAddress, hostPort, name):
     try:
         new_socket.connect((hostAddress, hostPort))
@@ -572,8 +614,9 @@ def connect_socket(new_socket, hostAddress, hostPort, name):
         new_socket.close()
         print('[' + name + '_ERROR] Connection failed:\n' + str(e))
         return None
-    print('[' + name +'_SUCCESS] Successfully connected to address.')
+    print('[' + name + '_SUCCESS] Successfully connected to address.')
     return new_socket
+
 
 def send_message(socket, message, name):
     try:
@@ -583,6 +626,7 @@ def send_message(socket, message, name):
         return False
     return True
 
+
 def receive_message(socket, name):
     try:
         response = socket.recv(1000).decode('ascii')
@@ -590,13 +634,16 @@ def receive_message(socket, name):
         print('[' + name + '_ERROR] Did not receive anything in request')
         return False
     return response
-    
+
+
 def update_members_list(message):
     global MEMBERS_LIST
-    MEMBERS_LIST = [(name, address, int(port), sdbm_hash(name + address + port)) for
-                    name, address, port in
+    MEMBERS_LIST = [(name, address, int(port),
+                     sdbm_hash(name + address + port))
+                    for name, address, port in
                     zip(message[1::3], message[2::3], message[3::3])]
     MEMBERS_LIST.sort(key=lambda member: member[3])
+
 
 def setup_poke_socket():
     global MY_PORT
