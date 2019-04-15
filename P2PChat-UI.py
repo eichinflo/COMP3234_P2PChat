@@ -651,8 +651,8 @@ class backward_link_listener(threading.Thread):
             BACKWARD_LINK_SOCKET = socket.socket()
             BACKWARD_LINK_SOCKET = bind_socket(BACKWARD_LINK_SOCKET,
                                                MY_PORT, 'BACKWARD_LINK')
-            BACKWARD_LINK_SOCKET.settimeout(1)
         if BACKWARD_LINK_SOCKET:
+            BACKWARD_LINK_SOCKET.settimeout(1)
             global MEMBERS_LIST
             global MSGID
             print('[DEBUG] Listening for Backward Link.')
@@ -691,6 +691,10 @@ class backward_link_listener(threading.Thread):
                         conn.close()
                 else:
                     conn.close()
+        else:
+            print("Could not bind the specified port")
+            do_Quit()
+
 
 
 class keepalive(threading.Thread):
