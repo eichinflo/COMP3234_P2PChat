@@ -299,50 +299,55 @@ def do_Quit():
     all TCP connections and releases all resources.
     """
     print('[DEBUG] Shutting down resources...')
-    global MY_SOCKET
-    if MY_SOCKET:
-        print('[DEBUG] Closing MY_SOCKET')
-        MY_SOCKET.close()
     global KEEPALIVE_THREAD
     if KEEPALIVE_THREAD:
         print('[DEBUG] Closing KEEPALIVE_THREAD')
         KEEPALIVE_THREAD.event.set()
         KEEPALIVE_THREAD.join()
-    global POKE_SOCKET
-    if POKE_SOCKET:
-        print('[DEBUG] Closing POKE_SOCKET')
-        POKE_SOCKET.close()
     global POKE_THREAD
     if POKE_THREAD:
         print('[DEBUG] Closing POKE_THREAD')
+        POKE_THREAD.event.set()
         POKE_THREAD.join()
-    global FORWARD_LINK_SOCKET
-    if FORWARD_LINK_SOCKET:
-        print('[DEBUG] Closing FORWARD_LINK_SOCKET')
-        FORWARD_LINK_SOCKET.close()
     global FORWARD_LINK_THREAD
     if FORWARD_LINK_THREAD:
         print('[DEBUG] Closing FORWARD_LINK_THRED')
         FORWARD_LINK_THREAD.event.set()
         FORWARD_LINK_THREAD.join()
-    global BACKWARD_LINKS
-    if len(BACKWARD_LINKS) > 1:
-        print('[DEBUG] Closing BACKWARD_LINKS')
-        for hsh, sckt in BACKWARD_LINKS:
-            sckt.close()
-    global BACKWARD_LINK_SOCKET
-    if BACKWARD_LINK_SOCKET:
-        print('[DEBUG] Closing BACKWARD_LINK_SOCKET')
-        BACKWARD_LINK_SOCKET.close()
     global BACKWARD_LINK_THREAD
     if BACKWARD_LINK_THREAD:
         print('[DEBUG] Closing BACKWARD_LINK_THREAD')
+        BACKWARD_LINK_THREAD.event.set()
         BACKWARD_LINK_THREAD.join()
     global MESSAGE_LISTENER_THREAD
     if MESSAGE_LISTENER_THREAD:
         print('[DEBUG] Closing MESSAGE_LISTENER_THREAD')
         MESSAGE_LISTENER_THREAD.event.set()
         MESSAGE_LISTENER_THREAD.join()
+
+    global MY_SOCKET
+    if MY_SOCKET:
+        print('[DEBUG] Closing MY_SOCKET')
+        MY_SOCKET.close()
+    global POKE_SOCKET
+    if POKE_SOCKET:
+        print('[DEBUG] Closing POKE_SOCKET')
+        POKE_SOCKET.close()
+    global BACKWARD_LINK_SOCKET
+    if BACKWARD_LINK_SOCKET:
+        print('[DEBUG] Closing BACKWARD_LINK_SOCKET')
+        BACKWARD_LINK_SOCKET.close()
+    global FORWARD_LINK_SOCKET
+    if FORWARD_LINK_SOCKET:
+        print('[DEBUG] Closing FORWARD_LINK_SOCKET')
+        FORWARD_LINK_SOCKET.close()
+        FORWARD_LINK_SOCKET = None
+        global BACKWARD_LINKS
+    if len(BACKWARD_LINKS) > 1:
+        print('[DEBUG] Closing BACKWARD_LINKS')
+        while BACKWARD_LINKS:
+            hsh, sckt = BACKWARD_LINKS.pop()
+            sckt.close()
     CmdWin.insert(1.0, '\nPress Quit')
     print('[DEBUG] Release succesful. Closing tk-window now.')
     win.destroy()
@@ -447,8 +452,11 @@ class text_message_listener(threading.Thread):
             else:
                 # listen_to must be updated in cases we got new connections
                 listen_to = get_all_links()
-                ready_sockets, _, _ = select.select(listen_to, [], [], 2)
-
+                try:
+                    ready_sockets, _, _ = select.select(listen_to, [], [], 2)
+                except Exception as e:
+                    print('[MESSAGE_ERROR] Selected threw an exception: ' +
+                          str(e))
                 for sckt in ready_sockets:
                     message = receive_message(sckt, 'TEXT_RECEIVE')
 
@@ -596,6 +604,7 @@ class backward_link_listener(threading.Thread):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
+        self.event = threading.Event()
 
     def run(self):
         global BACKWARD_LINK_SOCKET
@@ -605,6 +614,7 @@ class backward_link_listener(threading.Thread):
             BACKWARD_LINK_SOCKET = socket.socket()
             BACKWARD_LINK_SOCKET = bind_socket(BACKWARD_LINK_SOCKET,
                                                MY_PORT, 'BACKWARD_LINK')
+            BACKWARD_LINK_SOCKET.settimeout(1)
         if BACKWARD_LINK_SOCKET:
             global MEMBERS_LIST
             global MSGID
@@ -613,6 +623,10 @@ class backward_link_listener(threading.Thread):
                 try:
                     BACKWARD_LINK_SOCKET.listen(1)
                     conn, addr = BACKWARD_LINK_SOCKET.accept()
+                except socket.timeout as e:
+                    if self.event.is_set():
+                        return
+                    continue
                 except Exception as e:
                     print('[DEBUG] Error accepting backward link')
                     return
@@ -681,12 +695,14 @@ class poke_listener(threading.Thread):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
+        self.event = threading.Event()
 
     def run(self):
         print('[DEBUG] Starting ' + self.name)
         global POKE_SOCKET
         if not POKE_SOCKET:
             error = setup_poke_socket()
+            POKE_SOCKET.settimeout(2)
             if error:
                 print('[LISTENER ERROR] Error setting up poke socket')
                 return
@@ -694,6 +710,10 @@ class poke_listener(threading.Thread):
             try:
                 message, sender = POKE_SOCKET.recvfrom(1000)
                 message = message.decode('ascii')
+            except socket.timeout:
+                if self.event.is_set():
+                    return
+                continue
             except Exception as e:
                 print('[LISTENER_ERROR] Error receiving poke ' + str(e))
                 return
