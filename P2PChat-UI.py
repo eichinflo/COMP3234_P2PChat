@@ -4,11 +4,7 @@
 # Student name and No.: Florian Eichin 3035524902
 # Development platform: Mac OS/Linux
 # Python version: 3.7.x
-# Version: 0.2
-
-# ISSUES:
-# do_Quit() freezes when attempting to quit POKE_THREAD
-# Have nothing figured outputs why yet...
+# Version: 1.0
 
 import re
 from tkinter import *
